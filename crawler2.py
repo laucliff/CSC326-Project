@@ -25,6 +25,8 @@ from BeautifulSoup import *
 from collections import defaultdict
 import re
 
+import db_sqlite3
+
 def attr(elem, attr):
     """An html attribute from an html element. E.g. <a href="">, then
     attr(elem, "href") will get the href or an empty string."""
@@ -42,7 +44,7 @@ class crawler(object):
     This crawler keeps track of font sizes and makes it simpler to manage word
     ids and document ids."""
 
-    def __init__(self, db_conn, url_file):
+    def __init__(self, url_file):
         """Initialize the crawler with a connection to the database to populate
         and with the file containing the list of seed URLs to begin indexing."""
 
@@ -50,7 +52,7 @@ class crawler(object):
         #Reasons.. 
         #Not guaranteed enough memory for very large indexes
         #Have to rebuild cache every time crawler is run.. Crawler should be updated, not rewritten
-        #End result, will be slightly slower due to INSERT IF EXISTS mysql commands.
+        #End result, will be slightly slower due to INSERT IF NOT EXISTS mysql commands.
         self._url_queue = [ ]
         self._doc_id_cache = { }
         self._word_id_cache = { }
@@ -125,6 +127,8 @@ class crawler(object):
                     self._url_queue.append((self._fix_url(line.strip(), ""), 0))
         except IOError:
             pass
+        
+        db = db_sqlite3({'clean': True})
     
     # TODO remove me in real version
     def _mock_insert_document(self, url):
@@ -152,6 +156,9 @@ class crawler(object):
         #       2) query the lexicon for the id assigned to this word, 
         #          store it in the word id cache, and return the id.
 
+
+        #db.addWord(word);
+
         word_id = self._mock_insert_word(word)
         self._word_id_cache[word] = word_id
         return word_id
@@ -164,6 +171,8 @@ class crawler(object):
         # TODO: just like word id cache, but for documents. if the document
         #       doesn't exist in the db then only insert the url and leave
         #       the rest to their defaults.
+
+        #db.addPage(url)
         
         doc_id = self._mock_insert_document(url)
         self._doc_id_cache[url] = doc_id
@@ -182,10 +191,12 @@ class crawler(object):
         parsed_url = urlparse.urlparse(curr_url)
         return urlparse.urljoin(parsed_url.geturl(), rel)
 
-    def add_link(self, from_doc_id, to_doc_id):
+    def add_link(self, parent, child):
         """Add a link into the database, or increase the number of links between
         two pages in the database."""
         # TODO
+
+        db.addLink(parent, child);
 
     def _visit_title(self, elem):
         """Called when visiting the <title> tag."""

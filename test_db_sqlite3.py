@@ -6,7 +6,7 @@ class TestSqlite3Functions(unittest.TestCase):
   #TODO doSearch, once properly implemented, and sanitize, once I work that out.
 
   def setUp(self):
-    self.db = db_lib.db_sql3({'clean': True, 'location': 'test.db'})
+    self.db = db_lib.sql3({'clean': True, 'location': 'test.db'})
 
   def test_addWord(self):
     pass

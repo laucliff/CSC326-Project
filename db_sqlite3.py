@@ -1,6 +1,6 @@
 import sqlite3
 
-class db_sql3:
+class sql3:
 
   def __init__(self, params):
 

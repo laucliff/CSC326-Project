@@ -21,11 +21,11 @@
 
 import urllib2
 import urlparse
-from BeautifulSoup import *
+from lib.BeautifulSoup import *
 from collections import defaultdict
 import re
 
-import db_sqlite3
+import db_sqlite3 as db_lib
 
 def attr(elem, attr):
     """An html attribute from an html element. E.g. <a href="">, then
@@ -54,8 +54,6 @@ class crawler(object):
         #Have to rebuild cache every time crawler is run.. Crawler should be updated, not rewritten
         #End result, will be slightly slower due to INSERT IF NOT EXISTS mysql commands.
         self._url_queue = [ ]
-        self._doc_id_cache = { }
-        self._word_id_cache = { }
 
         # functions to call when entering and exiting specific tags
         self._enter = defaultdict(lambda *a, **ka: self._visit_ignore)
@@ -109,16 +107,10 @@ class crawler(object):
             'u', 'v', 'w', 'x', 'y', 'z', 'and', 'or',
         ])
 
-        # TODO remove me in real version
-        self._mock_next_doc_id = 1
-        self._mock_next_word_id = 1
-
         # keep track of some info about the page we are currently parsing
         self._curr_depth = 0
         self._curr_url = ""
-        self._curr_doc_id = 0
         self._font_size = 0
-        self._curr_words = None
 
         # get all urls into the queue
         try:
@@ -128,55 +120,7 @@ class crawler(object):
         except IOError:
             pass
         
-        db = db_sqlite3({'clean': True})
-    
-    # TODO remove me in real version
-    def _mock_insert_document(self, url):
-        """A function that pretends to insert a url into a document db table
-        and then returns that newly inserted document's id."""
-        ret_id = self._mock_next_doc_id
-        self._mock_next_doc_id += 1
-        return ret_id
-    
-    # TODO remove me in real version
-    def _mock_insert_word(self, word):
-        """A function that pretends to inster a word into the lexicon db table
-        and then returns that newly inserted word's id."""
-        ret_id = self._mock_next_word_id
-        self._mock_next_word_id += 1
-        return ret_id
-    
-    def word_id(self, word):
-        """Get the word id of some specific word."""
-        if word in self._word_id_cache:
-            return self._word_id_cache[word]
-        
-        # TODO: 1) add the word to the lexicon, if that fails, then the
-        #          word is in the lexicon
-        #       2) query the lexicon for the id assigned to this word, 
-        #          store it in the word id cache, and return the id.
-
-
-        #db.addWord(word);
-
-        word_id = self._mock_insert_word(word)
-        self._word_id_cache[word] = word_id
-        return word_id
-    
-    def document_id(self, url):
-        """Get the document id for some url."""
-        if url in self._doc_id_cache:
-            return self._doc_id_cache[url]
-        
-        # TODO: just like word id cache, but for documents. if the document
-        #       doesn't exist in the db then only insert the url and leave
-        #       the rest to their defaults.
-
-        #db.addPage(url)
-        
-        doc_id = self._mock_insert_document(url)
-        self._doc_id_cache[url] = doc_id
-        return doc_id
+        self.db = db_lib.sql3({'clean': True, 'location':'test.db'})
     
     def _fix_url(self, curr_url, rel):
         """Given a url and either something relative to that url or another url,
@@ -196,14 +140,13 @@ class crawler(object):
         two pages in the database."""
         # TODO
 
-        db.addLink(parent, child);
+        #db.addLink(parent, child);
 
     def _visit_title(self, elem):
         """Called when visiting the <title> tag."""
         title_text = self._text_of(elem).strip()
         print "document title="+ repr(title_text)
 
-        # TODO update document title for document id self._curr_doc_id
     
     def _visit_a(self, elem):
         """Called when visiting <a> tags."""
@@ -220,15 +163,10 @@ class crawler(object):
         
         # add a link entry into the database from the current document to the
         # other document
-        self.add_link(self._curr_doc_id, self.document_id(dest_url))
+        self.db.addPage(dest_url)
+        self.db.addLink(self._curr_url, dest_url)
 
         # TODO add title/alt/text to index for destination url
-    
-    def _add_words_to_document(self):
-        # TODO: knowing self._curr_doc_id and the list of all words and their
-        #       font sizes (in self._curr_words), add all the words into the
-        #       database for this document
-        print "    num words="+ str(len(self._curr_words))
 
     def _increase_font_factor(self, factor):
         """Increade/decrease the current font size."""
@@ -248,7 +186,9 @@ class crawler(object):
             word = word.strip()
             if word in self._ignored_words:
                 continue
-            self._curr_words.append((self.word_id(word), self._font_size))
+            print word, self._curr_url, self._font_size
+            self.db.addWord(word)
+            self.db.addIndex(word,self._curr_url,self._font_size)
         
     def _text_of(self, elem):
         """Get the text inside some element without any tags."""
@@ -300,12 +240,12 @@ class crawler(object):
                     continue
                 
                 # enter the tag
-                self._enter[tag_name](tag)
+                self._enter[tag_name](tag) #do tag operations here
                 stack.append(tag)
 
             # text (text, cdata, comments, etc.)
             else:
-                self._add_text(tag)
+                self._add_text(tag) #add text here
 
     def crawl(self, depth=2, timeout=3):
         """Crawl the web!"""
@@ -319,13 +259,14 @@ class crawler(object):
             if depth_ > depth:
                 continue
 
-            doc_id = self.document_id(url)
+            self.db.addPage(url)
 
             # we've already seen this document
-            if doc_id in seen:
+            if url in seen:
                 continue
 
-            seen.add(doc_id) # mark this document as haven't been visited
+            # !!! change this to page url
+            seen.add(url) # mark this document as haven't been visited
             
             socket = None
             try:
@@ -334,21 +275,19 @@ class crawler(object):
 
                 self._curr_depth = depth_ + 1
                 self._curr_url = url
-                self._curr_doc_id = doc_id
                 self._font_size = 0
-                self._curr_words = [ ]
-                self._index_document(soup)
-                self._add_words_to_document()
+                self._index_document(soup) #index page fxn
                 print "    url="+repr(self._curr_url)
-
             except Exception as e:
                 print e
+                import traceback
+                traceback.print_exc()
                 pass
             finally:
                 if socket:
                     socket.close()
 
 if __name__ == "__main__":
-    bot = crawler(None, "urls.txt")
+    bot = crawler("urls.txt")
     bot.crawl(depth=1)
 

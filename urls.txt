@@ -1,0 +1,2 @@
+http://www.eecg.toronto.edu/~jzhu/csc326/csc326proj_web/index.html
+http://greenteapress.com/thinkpython/thinkpython.html

@@ -3,5 +3,6 @@ RushedSearch
 <input type="text" name="query">
 <input type="submit" value="Search">
 </form>
-searchysearchsearch
-
+%if results:
+  %for result in results:
+    <div> {{result}} <br> </div>

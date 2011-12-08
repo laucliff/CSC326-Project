@@ -73,7 +73,11 @@ class sql3:
     self.conn.commit()
 
   def doSearch(word):
-    self.c.execute('''SELECT word_id, url_id, size, count FROM indices WHERE word like '?';''', (word,))
+    self.c.execute('''SELECT rowid from words WHERE word=?;''', (word,))
+    word_id = next(iter(self.c.fetchone()))
+
+    #self.c.execute('''SELECT word_id, url_id, size, count FROM indices WHERE word like '?';''', (word,))
+    self.c.execute('''SELECT DISTINCT url FROM indices LEFT JOIN words ON words.rowid = indices.word_id LEFT JOIN pages on pages.rowid = indices.url_id WHERE word_id = ? ORDER BY rank''', (word_id,))
     return self.c
 
   def getAllIndices(self):

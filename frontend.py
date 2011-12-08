@@ -1,19 +1,19 @@
 from lib.bottle import *
+import db_sqlite3 as db_lib
 
-
-#todo
-#html template
-#
 
 @route('/', method='GET')
 def searchPage():
-  t = request.GET.get('query', '').strip()
-  print t
-  if t: 
-    print 'true' 
-  else: 
-    print 'false'
-  s = template('main')
+  query = request.GET.get('query', '').strip()
+  print query
+  if query: 
+    db = db_lib.sql3()
+    results = db.doSearch(query)
+  else:
+    results = None
+  
+  s = template('main', results=results)
+
   return s
 
 run()
